@@ -1,0 +1,233 @@
+"use client";
+
+import React, { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Volume2, Mic, ImageIcon, Bot } from "lucide-react";
+import { motion } from "framer-motion";
+
+// AI Teacher for various subjects (Math, Coding, Language)
+const AIAssistant = ({ subject }: { subject: string }) => {
+  const [lesson, setLesson] = useState("");
+
+  const getLessonContent = () => {
+    switch (subject) {
+      case "math":
+        return "Let's solve an easy math problem! Try 3 + 5.";
+      case "coding":
+        return "In coding, a variable stores data. For example, let x = 10. Try defining your own!";
+      case "language":
+        return "To say 'Hello' in French, you say 'Bonjour'. Can you say it?";
+      default:
+        return "Start by asking your question!";
+    }
+  };
+
+  React.useEffect(() => {
+    const lessonContent = getLessonContent();
+    setLesson(lessonContent);
+  }, [subject]);
+
+  return (
+    <div>
+      <Card className="rounded-2xl shadow-xl" role="region" aria-labelledby="ai-assistant">
+        <CardContent className="space-y-2 p-4">
+          <h3 className="text-lg font-semibold" id="ai-assistant">
+            AI Assistant ({subject})
+          </h3>
+          <div className="text-sm">{lesson}</div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default function AssistiveApp() {
+  const [subject, setSubject] = useState("math");
+  const [input, setInput] = useState("");
+  const [response, setResponse] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [image, setImage] = useState<File | null>(null);
+  const [language, setLanguage] = useState("tr-TR");
+  const [progress, setProgress] = useState(0); // User progress tracking
+  const [history, setHistory] = useState<{ question: string; answer: string }[]>([]);
+
+  // Handle AI response and history
+  const handleAIResponse = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("input", input);
+      formData.append("language", language);
+      if (image) formData.append("image", image);
+
+      // Check if the image contains explicit content
+      if (image) {
+        const explicitCheck = await checkForExplicitContent(image);
+        if (explicitCheck) {
+          setError("The uploaded image contains explicit content.");
+          setLoading(false);
+          return;
+        }
+      }
+
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("Server error.");
+
+      const data = await res.json();
+      setResponse(data.response);
+      setProgress(prev => prev + 10); // Increment progress
+      setHistory((prev) => [...prev, { question: input, answer: data.response }]);
+      setInput("");
+      setImage(null);
+    } catch (err) {
+      setError("An error occurred. Please try again.");
+      setResponse("");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Voice Input functionality
+  const handleVoiceInput = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert("Voice input not supported.");
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = language;
+    recognition.start();
+
+    recognition.onresult = (event) => {
+      setInput(event.results[0][0].transcript);
+    };
+  };
+
+  // Speak AI response aloud
+  const handleSpeak = () => {
+    const utterance = new SpeechSynthesisUtterance(response);
+    utterance.lang = language;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Handle subject change (Math, Coding, Language)
+  const handleSubjectChange = (newSubject: string) => {
+    setSubject(newSubject);
+  };
+
+  // Explicit content check (using a hypothetical API)
+  const checkForExplicitContent = async (image: File) => {
+    // Example API call to check image content for explicit material
+    const formData = new FormData();
+    formData.append("image", image);
+
+    const res = await fetch("/api/checkExplicitContent", {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await res.json();
+    return result.isExplicit; // Assumes the response contains an "isExplicit" boolean
+  };
+
+  const handlePayment = () => {
+    // Payment integration (e.g., stripe)
+    alert("Payment processing will be implemented here.");
+  };
+
+  return (
+    <div className="p-4 max-w-2xl mx-auto space-y-4" role="main">
+      <motion.h1
+        className="text-3xl font-bold text-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        aria-live="polite"
+      >
+        🌍 AI Assisted Learning App (Accessible, Multilingual)
+      </motion.h1>
+
+      <Card className="rounded-2xl shadow-xl" role="region" aria-labelledby="question-section">
+        <CardContent className="space-y-2 p-4">
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask your question..."
+            className="text-lg"
+            aria-label="Enter your question"
+          />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setImage(e.target.files?.[0] || null)}
+            className="text-sm mt-2"
+            aria-label="Upload an image"
+          />
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="border rounded-md p-1 text-sm"
+            aria-label="Select language"
+          >
+            <option value="tr-TR">Türkçe</option>
+            <option value="en-US">English</option>
+            <option value="es-ES">Español</option>
+            <option value="fr-FR">Français</option>
+            <option value="de-DE">Deutsch</option>
+          </select>
+          <div className="text-sm text-right text-muted-foreground">
+            {input.length} characters
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleAIResponse} disabled={loading} aria-label="Ask the AI teacher">
+              <Bot className="w-4 h-4 mr-2" />
+              {loading ? "Loading..." : "Ask AI"}
+            </Button>
+            <Button variant="outline" onClick={handleSpeak} disabled={!response} aria-label="Read out the AI response">
+              <Volume2 className="w-4 h-4 mr-2" />
+              Read Aloud
+            </Button>
+            <Button variant="outline" onClick={handleVoiceInput} aria-label="Start voice input">
+              <Mic className="w-4 h-4 mr-2" />
+              Speak
+            </Button>
+          </div>
+          {error && <p className="text-sm text-red-500">{error}</p>}
+        </CardContent>
+      </Card>
+
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Select Subject:</h2>
+        <Button onClick={() => handleSubjectChange("math")}>Math</Button>
+        <Button onClick={() => handleSubjectChange("coding")}>Coding</Button>
+        <Button onClick={() => handleSubjectChange("language")}>Language</Button>
+      </div>
+
+      <AIAssistant subject={subject} />
+
+      <div className="mt-4">
+        <h3>Your Progress: {progress}%</h3>
+        <Button onClick={handlePayment}>Subscribe/Pay</Button>
+      </div>
+
+      {history.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold">History</h2>
+          {history.map((item, index) => (
+            <Card key={index} className="rounded-lg shadow-sm">
+              <CardContent className="p-3 text-sm space-y-1">
+                <div><strong>Question:</strong> {item.question}</div>
+                <div><strong>Answer:</strong> {item.answer}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
